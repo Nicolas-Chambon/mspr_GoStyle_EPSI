@@ -1,0 +1,107 @@
+version: 2
+general:
+  branches:
+    only:
+      - master
+      - dev
+
+defaults: &defaults
+  working_directory: ~/mspr_project
+  docker:
+    - image: circleci/node:10
+
+jobs:
+  checkout:
+    <<: *defaults
+    steps:
+      - checkout
+      - persist_to_workspace:
+          root: ../
+          paths:
+            - mspr_project
+
+  dependencies-server:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ../
+      - restore_cache:
+          key: v1-server-node-dependency-cache-{{ checksum "server/package-lock.json" }}
+      - run: npm install
+      - save_cache:
+          key: v1-server-node-dependency-cache-{{ checksum "server/package-lock.json" }}
+          paths:
+            - server/node_modules
+      - persist_to_workspace:
+          root: ../
+          paths:
+            - mspr_project/server/node_modules
+
+  dependencies-mobile:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ../
+      - restore_cache:
+          key: v1-mobile-node-dependency-cache-{{ checksum "mobile/package-lock.json" }}
+      - run: npm install
+      - save_cache:
+          key: v1-mobile-node-dependency-cache-{{ checksum "mobile/package-lock.json" }}
+          paths:
+            - mobile/node_modules
+      - persist_to_workspace:
+          root: ../
+          paths:
+            - mspr_project/mobile/node_modules
+
+  build-mobile:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ../
+      - run: cd mobile && npm run build
+
+  build-server:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ../
+      - run: cd server && npm install && npm run build
+
+  lint-server:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ../
+      - run: cd server && npm install && npm run clean && npm run lint
+
+  lint-mobile:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ../
+      - run: cd mobile && npm run lint
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - checkout
+      - dependencies-server:
+          requires:
+            - checkout
+      - dependencies-mobile:
+          requires:
+            - checkout
+      - build-mobile:
+          requires:
+            - dependencies-mobile
+      - build-server:
+          requires:
+            - dependencies-server
+      - lint-server:
+          requires:
+            - dependencies-server
+      - lint-mobile:
+          requires:
+            - dependencies-mobile
